@@ -1,0 +1,12 @@
+{
+  "LawSearch": {
+    "resultMsg": "success",
+    "키워드": "존재하지않는법령zzz",
+    "page": "1",
+    "resultCode": "00",
+    "target": "eflaw",
+    "totalCnt": "0",
+    "section": "lawNm",
+    "numOfRows": "0"
+  }
+}

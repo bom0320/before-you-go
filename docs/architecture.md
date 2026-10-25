@@ -13,6 +13,12 @@ MCP는 원문 접근과 출처 제공을 담당하고 vooy가 추가 열람 및 
 
 `src/official-sources.ts`는 과거 자료의 출발점과 조회 도구 계약·공유 예산을 관리한다. `src/http.ts`가 서버당 한 번 reader를 구성하여 stateless MCP 연결 사이에도 분당 12회·동시 2회 한도를 공유한다. 개인정보나 클라이언트 ID는 저장하지 않는다. 기존 fetchSource의 HTTPS·DNS/IP 고정·허용 도메인·리다이렉트·15초/1MB/24,000자 제한을 그대로 재사용한다. 오류에는 성공 structuredContent를 반환하지 않는다.
 
+## 선택적 법제처 API 확장
+
+ENABLE_LAW_API=true인 별도 서버에서만 `vooy → search_official_laws → lawSearch.do(target=eflaw)` 및 `vooy → get_official_law → lawService.do(target=eflaw)`를 추가한다. 기본 서버는 기존 3개 도구다. src/law/schema.ts는 입력·실측 JSON·출력 검증, client.ts는 HTTPS 고정 endpoint·OC 주입·시간/크기/공유 예산·안전한 오류, tools.ts는 정규화·원문 범위·MCP 등록을 맡는다. src/http.ts는 활성화 시 서버당 하나의 client/tools를 구성하여 stateless MCP 연결 간 예산을 공유한다.
+
+법령 API는 규정과 시행본, 기존 read_official_source는 민원 안내를 제공한다. vooy가 비교·판단하고 사람은 개인별 조건 확인과 신청 결정을 맡는다. 내부 Research와 전송·Host/Origin·기존 도구 계약은 유지한다. 배포·심사 서버 격리 및 ID/MST/JO 정책은 [법령 API 가이드](law-api.md)를 따른다.
+
 ## 선택적 내부 OpenAI Research 흐름과 책임
 
 ```text
@@ -50,7 +56,7 @@ Agent가 조사 목적·질의·열람 대상·근거 충분성·경로 후보�
 
 선택적 내부 Research 흐름은 `HTTP → createMcpHandler → createMcpServer → test 또는 runResearch → 검증 → resolveProcedure → Result + Evidence`다. SDK v2 `createMcpHandler`와 `@modelcontextprotocol/node`의 `toNodeHandler`를 사용하며 기본 legacy stateless 지원을 유지한다. 세션 DB나 별도 `/sse` 서버는 없다.
 
-procedure는 test와 national_pension_premium_change를 구분한다. 가입 유형 미확인은 질문, 다른 가입 유형은 unsupported, 상황이 확인된 임의가입자는 경로와 근거를 반환하되 needs_verification으로 보류한다. 원문은 요청마다 조회하며 세션 DB·영속 저장·과거 문서의 자동 갱신은 없다. vooy와 공개 터널의 실제 연결 성공은 아직 검증되지 않았다. 실행 및 cloudflared 제약은 [README](../README.md)를 따른다.
+procedure는 test와 national_pension_premium_change를 구분한다. 가입 유형 미확인은 질문, 다른 가입 유형은 unsupported, 상황이 확인된 임의가입자는 경로와 근거를 반환하되 needs_verification으로 보류한다. 원문은 요청마다 조회하며 세션 DB·영속 저장·과거 문서의 자동 갱신은 없다. 최신 사용자 확인으로 기존 vooy·Cloudflare 연결과 3개 도구 인식은 성공했으며 Recipe는 출시 심사 중이다. 이번 법령 개발에서는 공개 서버·연결을 변경하지 않는다. 실행 및 cloudflared 제약은 [README](../README.md)를 따른다.
 
 ## 선택적 내부 Research 실행과 강제 한도
 

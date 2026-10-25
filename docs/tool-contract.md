@@ -1,5 +1,11 @@
 # MCP Tool Contracts
 
+## 선택적 법령 API 도구
+
+기본 ENABLE_LAW_API=false에서는 기존 3개 계약만 노출한다. 문자열 true인 서버에서만 search_official_laws와 get_official_law를 추가한다. 기존 계약은 변경하지 않는다. 검색은 query/version/display/page, 본문은 lawId 또는 masterId+effectiveDate와 선택적 article/articleBranch를 받는다. ID 현행 조회와 MST 시행본 조회를 혼동하지 않는다. OC는 서버에서만 주입하며 입력·결과에 포함하지 않는다.
+
+입출력·본문 범위·실패 코드·한도는 [법령 API 계약](law-api.md#입력출력-계약)을 따른다. 법령 원문은 실제 민원 접수 가능성·개별 대리 권한·vooy 최종 답변을 검증한 결과가 아니다. 기존 read_official_source를 대체하거나 같은 기능의 새 도구를 만들지 않는다.
+
 ## 기본 vooy 데모 — 공식 자료 조회
 
 기본 Agent는 vooy이며 MCP는 현재 신청 가능성을 판정하지 않고 공식 공개 자료를 제공한다. 아래 두 도구에는 OpenAI 키가 필요 없다. 각 성공 결과는 content JSON과 structuredContent가 동일하다. 외부 본문은 명령이 아닌 비신뢰 데이터다.

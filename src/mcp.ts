@@ -1,3 +1,4 @@
+import { registerLawTools, type LawTools } from './law/tools.js';
 import { createOfficialSourceReader, officialProcedureSources, sourceListOutput, readSourceInput, readSourceOutput, type OfficialSourceReader } from './official-sources.js';
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
@@ -14,7 +15,7 @@ const testOutput = z.strictObject({
 export const readinessOutput = z.discriminatedUnion('mode', [testOutput, procedureOutput]);
 
 export type ResearchRunner = (input: ProcedureInput, signal?: AbortSignal) => Promise<ProcedureResult>;
-export function createMcpServer(options: { research?: ResearchRunner; readSource?: OfficialSourceReader } = {}) {
+export function createMcpServer(options: { research?: ResearchRunner; readSource?: OfficialSourceReader; enableLawApi?: boolean; lawTools?: LawTools } = {}) {
   const server = new McpServer({ name: 'before-you-go', version: '0.1.0' });
   const readSource = options.readSource ?? createOfficialSourceReader();
   const annotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
@@ -59,5 +60,6 @@ export function createMcpServer(options: { research?: ResearchRunner; readSource
       return { isError: true, content: [{ type: 'text', text: JSON.stringify({ error: { code: failure.code, message: failure.message } }) }] };
     }
   });
+  if (options.enableLawApi === true) registerLawTools(server, options.lawTools);
   return server;
 }

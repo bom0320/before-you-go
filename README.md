@@ -91,11 +91,28 @@ pnpm smoke --sources --legacy https://YOUR-HOST/mcp
 
 기본 smoke는 tools/list의 3개 도구, test, 정보 부족/지원 범위, 출발점 목록과 차단 URL을 확인합니다. --sources는 실제 국민연금공단 원문을 읽고 URL·본문·시각을 출력합니다. --live는 실제 서버의 모델·검색·원문 조회를 호출하고 결과 전체를 출력하며, 실패 시 비정상 종료합니다. pnpm test의 업무 호출은 주입한 Fake 기반 HTTP 테스트이므로 실제 API 성공의 증거가 아닙니다.
 
-이번 단계에서 실제 국민연금 변경 안내 원문 조회와 로컬 modern/legacy MCP 호출을 확인했습니다. Fake 테스트와 실제 조회는 별개입니다. 외부 HTTPS·vooy Recipe Studio 호출은 아직 미검증입니다. 내부 OpenAI Research의 --live 성공도 별도 검증 대상이며 기본 데모의 전제 조건이 아닙니다.
+이번 단계에서 실제 국민연금 변경 안내 원문 조회와 로컬 modern/legacy MCP 호출을 확인했습니다. Fake 테스트와 실제 조회는 별개입니다. 최신 사용자 확인으로 Cloudflare HTTPS·vooy 사용자 지정 MCP 연결 및 기존 3개 도구 인식은 성공했고 Recipe Studio는 출시 심사 대기 중입니다. 이번 법령 확장 개발에서는 기존 공개 연결을 변경하지 않았으며 신규 도구의 공개/Recipe 호출은 검증하지 않았습니다. 내부 OpenAI Research의 --live 성공도 별도 검증 대상이며 기본 데모의 전제 조건이 아닙니다.
 
 vooy에서는 전송 방식으로 **Streamable HTTP**, 서버 URL로 `https://YOUR-HOST/mcp`를 지정합니다.
 SDK v2 `createMcpHandler`의 기본 `legacy: 'stateless'` 지원을 유지하여 기존 클라이언트의 initialize 흐름도 수용합니다.
-이전 HTTP+SSE 전용 `/sse` 전송은 제공하지 않습니다. 실제 vooy 연결은 별도 검증이 필요합니다.
+이전 HTTP+SSE 전용 `/sse` 전송은 제공하지 않습니다. 기존 vooy 연결은 사용자 확인으로 성공했으며 이번 작업에서는 변경하지 않습니다.
+
+## 선택적 법제처 API 확장 (기본 비활성)
+
+심사 중인 기존 서버를 보호하기 위해 별도 `feat/official-law-api` worktree에서 개발합니다. `ENABLE_LAW_API` 미설정/false이면 기존 3개 도구만 제공합니다. 문자열 true일 때만 `search_official_laws`, `get_official_law`를 추가하며 기존 도구 계약·Cloudflare 설정·내부 OpenAI Research는 변경하지 않습니다.
+
+`LAW_API_OC`는 서버에 승인된 인증값을 설정합니다. OpenAI 키는 필요 없으며 OC가 없으면 신규 도구 호출 시 law_api_not_configured를 반환합니다. HTTPS 고정 API만 호출하고 인증값 포함 URL을 결과·출처·로그에 노출하지 않습니다. 법적 규정과 실제 민원 접수 경로는 구분합니다.
+
+```sh
+# 공개 서버 디렉터리가 아닌 개발 worktree에서 실행, LAW_API_OC는 안전하게 별도 설정
+PORT=3002 ENABLE_LAW_API=true pnpm dev
+# 다른 터미널: 도구 등록만 확인
+pnpm exec tsx scripts/law-smoke.ts http://127.0.0.1:3002/mcp
+# 승인 인증값이 서버에 설정된 경우에만 Live 검색→관련 조문 조회
+pnpm exec tsx scripts/law-smoke.ts --live http://127.0.0.1:3002/mcp
+```
+
+ID는 현행 조회, MST+시행일은 특정 시행본 조회입니다. 관련 article을 지정하며 크기 초과 시 일부를 전체처럼 반환하지 않습니다. JSON/XML 형식 변화·인증·네트워크 실패는 도구 오류입니다. 정확한 계약·한도·샘플 및 승인 인증값 검증의 차이·운영 반영 절차는 [법령 API 가이드](docs/law-api.md)를 따릅니다. 기본 smoke는 계속 3개 도구 서버를 대상으로 사용합니다.
 
 ## 선택적 내부 Research 정책과 제한
 
