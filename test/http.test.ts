@@ -26,7 +26,8 @@ test('HTTP MCP: legacy and modern clients, validation and HTTP guards', async t 
         await client.connect(new StreamableHTTPClientTransport(url));
         assert.equal(client.getProtocolEra(), mode === 'legacy' ? 'legacy' : 'modern');
         const { tools } = await client.listTools();
-        assert.deepEqual(tools.map(tool => tool.name), ['check_procedure_readiness']);
+        assert.deepEqual(tools.map(tool => tool.name).sort(), ['check_procedure_readiness', 'list_official_procedure_sources', 'read_official_source']);
+        tools.sort((a, b) => a.name.localeCompare(b.name));
         assert.equal(tools[0].inputSchema.type, 'object');
         const result = await client.callTool({ name: 'check_procedure_readiness', arguments: { procedure: 'test' } });
         assert.ok(!result.isError);

@@ -1,11 +1,13 @@
+import { createOfficialSourceReader, type OfficialSourceFetcher } from './official-sources.js';
 import { createServer } from 'node:http';
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import { hostHeaderValidation, originValidation, toNodeHandler } from '@modelcontextprotocol/node';
 import { createMcpServer, type ResearchRunner } from './mcp.js';
 
-export function createHttpServer(options: { allowedHosts?: string[]; allowedOrigins?: string[]; research?: ResearchRunner } = {}) {
+export function createHttpServer(options: { allowedHosts?: string[]; allowedOrigins?: string[]; research?: ResearchRunner; sourceFetcher?: OfficialSourceFetcher } = {}) {
   // SDK default legacy stateless support deliberately retained for older clients.
-  const handler = createMcpHandler(() => createMcpServer({ research: options.research }));
+  const readSource = createOfficialSourceReader(options.sourceFetcher);
+  const handler = createMcpHandler(() => createMcpServer({ research: options.research, readSource }));
   const handleMcp = toNodeHandler(handler);
   const local = ['localhost', '127.0.0.1', '[::1]'];
   const validateHost = hostHeaderValidation(options.allowedHosts ?? local);

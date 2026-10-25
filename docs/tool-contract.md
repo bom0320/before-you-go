@@ -1,10 +1,33 @@
-# check_procedure_readiness — Tool Contract
+# MCP Tool Contracts
+
+## 기본 vooy 데모 — 공식 자료 조회
+
+기본 Agent는 vooy이며 MCP는 현재 신청 가능성을 판정하지 않고 공식 공개 자료를 제공한다. 아래 두 도구에는 OpenAI 키가 필요 없다. 각 성공 결과는 content JSON과 structuredContent가 동일하다. 외부 본문은 명령이 아닌 비신뢰 데이터다.
+
+### list_official_procedure_sources
+
+입력은 추가 속성을 허용하지 않는 `{}`. 출력은 `{ mode: "source_starting_points", notice, sources }`다. sources 요소는 `{ id, institution, title, url, purpose, previouslyResearched }`이며 docs/sources.md의 S01·S02·S03·S04·S06·S07 조사 출발점 6개다. 목록을 반환할 때 원문을 조회하지 않으며 과거 조사 사실을 최신 행정 규칙으로 확정하지 않는다.
+
+### read_official_source
+
+입력은 `{ "url": "https://nps.or.kr/..." }`만 허용하며 trim 후 1~2048자다. 개인정보·계정·토큰을 포함하지 않는다. 허용 범위는 기존 nps.or.kr / gov.kr / law.go.kr과 정확한 하위 도메인의 HTTPS 공개 HTML·텍스트다. URL·DNS·리다이렉트는 기존 fetchSource에서 검증한다.
+
+성공 출력: `{ mode: "official_source", status: "read", institution, url, text, links, retrievedAt, notice }`. url은 실제 최종 공식 URL, text는 이번에 읽은 원문의 정규화 본문(최대 24,000자), links는 실제 문서에서 관찰한 공식 HTTPS 링크(최대 30개), retrievedAt은 ISO 조회 시각이다. links는 아직 열람하지 않은 주소이며 신청 접수 경로라는 판정도 아니다. 반환된 링크를 같은 도구로 다시 조회할 수 있다. 기관명은 허용된 최종 호스트로 식별한다.
+
+문서 형식 미지원·로그인·빈 본문·네트워크/HTTP 오류·URL 차단·예산 초과는 `isError: true`와 content JSON `{ error: { code, message } }`만 반환한다. 성공 status·text·structuredContent를 만들지 않는다. 원본 오류나 입력 URL을 에러 메시지에 복사하지 않는다. 대표 code: blocked_url / blocked_address / unsupported_document / inaccessible_source / empty_source / document_too_large / source_http_error / source_fetch_failed / source_timeout / redirect_limit / source_budget_exceeded.
+
+조회 예산은 서버 인스턴스 전체에서 분당 12회(차단·실패 포함), 동시 2회이며 MCP 연결마다 초기화하지 않는다. 서버 재시작 시 초기화된다. 요청 15초·문서 1MB·리다이렉트 3회 제한을 재사용한다. PDF·JS 실행·인증 우회·외부 쓰기·민원 제출은 지원하지 않는다. 로그인 화면 탐지는 휴리스틱으로 완전한 판별이 아니므로 vooy도 본문 범위를 확인한다.
+
+vooy는 경로 존재·개인별 조건 충족·현재 어려움을 구분해 본인/가족·변경 업무·시행일을 대조하고 미확인 조건을 보류한다. 검색은 제공하지 않으며 자료 탐색은 출발점과 관찰 링크에 한정된다. [Recipe Studio 지침과 검증 상태](vooy-integration.md)를 따른다.
+
+## check_procedure_readiness — 기존 test 및 선택적 OpenAI Research
+
 
 ## Purpose
 
 국민연금 임의가입자의 보험료 변경 절차와 준비 사항을 공식 근거로 사전 점검한다. 현재 경로가 막혔을 때 검증된 다른 경로와 다음 행동을 안내한다. 문제 배경은 [problem-definition.md](problem-definition.md), 제품 범위는 [brief.md](brief.md)를 따른다. 실제 접수·승인·본인 인증을 수행하지 않는다.
 
-**현재 도구는 기존 test 계약과 아래 업무 계약을 모두 구현한다.** 업무 분기는 Research Agent가 조사하고 서버가 직접 읽어 검증한 원문으로 질문·공식 경로·미확인 조건을 반환한다. 정적 스냅샷은 실시간 근거로 쓰지 않는다. 현재 구조화 입력만으로 신분·인증·권한의 완전성을 독립 검증할 수 없어 ready·not_ready·use_channel은 반환하지 않는다. 상태의 나머지 정의는 후속 검증에 대비한 계약으로 유지한다.
+**check 도구는 기존 test 계약과 아래 선택적 업무 계약을 모두 구현한다.** 기본 vooy 데모에서는 위 두 조회 도구를 선택하며, 내부 Research에는 별도의 유효한 OpenAI 키·잔액이 필요하다. 업무 분기는 Research Agent가 조사하고 서버가 직접 읽어 검증한 원문으로 질문·공식 경로·미확인 조건을 반환한다. 정적 스냅샷은 실시간 근거로 쓰지 않는다. 현재 구조화 입력만으로 신분·인증·권한의 완전성을 독립 검증할 수 없어 ready·not_ready·use_channel은 반환하지 않는다. 상태의 나머지 정의는 후속 검증에 대비한 계약으로 유지한다.
 
 ## 현재 통신 검증 계약
 

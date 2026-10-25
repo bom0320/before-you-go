@@ -1,6 +1,19 @@
 # Architecture
 
-## 요청 흐름과 책임
+## 기본 vooy 데모 흐름과 책임
+
+```text
+User → vooy (목표·상황·자료 선택·비교·질문·다음 행동 판단)
+         ↕ Streamable HTTP /mcp
+       list_official_procedure_sources → 과거 조사 출발점
+       read_official_source → fetchSource → 실제 공식 공개 원문·관찰 링크·조회 시각
+```
+
+MCP는 원문 접근과 출처 제공을 담당하고 vooy가 추가 열람 및 사용자별 적용을 판단한다. 목록은 현재 규칙 확정이 아니며 원문 성공도 개인별 신청 가능성 판정이 아니다. 기본 경로는 OpenAI 모델·검색 API를 호출하지 않는다. 범용 검색 없이 출발점과 관찰된 공식 링크만 탐색한다.
+
+`src/official-sources.ts`는 과거 자료의 출발점과 조회 도구 계약·공유 예산을 관리한다. `src/http.ts`가 서버당 한 번 reader를 구성하여 stateless MCP 연결 사이에도 분당 12회·동시 2회 한도를 공유한다. 개인정보나 클라이언트 ID는 저장하지 않는다. 기존 fetchSource의 HTTPS·DNS/IP 고정·허용 도메인·리다이렉트·15초/1MB/24,000자 제한을 그대로 재사용한다. 오류에는 성공 structuredContent를 반환하지 않는다.
+
+## 선택적 내부 OpenAI Research 흐름과 책임
 
 ```text
 User → vooy → MCP Tool → Research Orchestrator
@@ -20,7 +33,7 @@ Agent가 조사 목적·질의·열람 대상·근거 충분성·경로 후보�
 | --- | --- |
 | `src/index.ts` | PORT 검사, 허용 Host/Origin 설정 전달, 127.0.0.1 바인딩, 실행·종료 |
 | `src/http.ts` | Node HTTP 서버, SDK Host/Origin 검증, `/mcp` 라우팅, 오류 응답, 핸들러 정리 |
-| `src/mcp.ts` | test 또는 실제 Research 호출. 정상 결과 텍스트/structuredContent 일치, 기술 실패 isError |
+| `src/mcp.ts` | 출발점·원문 조회 도구와 기존 test 또는 선택적 Research 호출. 정상 결과 텍스트/structuredContent 일치, 기술 실패 isError |
 | `src/procedure/schema.ts` | Zod 업무 입출력 계약과 TypeScript 타입 |
 | `src/procedure/data.ts` | 과거 조사 스냅샷. 실제 실행에서 import하지 않음 |
 | `src/procedure/check.ts` | 순수 입력 사전 확인과 검증된 조사 초안의 결과 매핑. 어려운 경로의 다음 행동 제외 |
@@ -35,11 +48,11 @@ Agent가 조사 목적·질의·열람 대상·근거 충분성·경로 후보�
 | `test/research.test.ts` | Fake 모델/검색/원문과 실제 SDK 요청 직렬화로 동적 결과·실패·한도·SSRF·근거 검사 |
 | `test/http.test.ts` | 실제 HTTP 포트에서 legacy/auto 클라이언트의 test/업무 호출, 입력 거부, Host/Origin 및 경로 검증 |
 
-현재 흐름은 `HTTP → createMcpHandler → createMcpServer → test 또는 runResearch → 검증 → resolveProcedure → Result + Evidence`다. SDK v2 `createMcpHandler`와 `@modelcontextprotocol/node`의 `toNodeHandler`를 사용하며 기본 legacy stateless 지원을 유지한다. 세션 DB나 별도 `/sse` 서버는 없다.
+선택적 내부 Research 흐름은 `HTTP → createMcpHandler → createMcpServer → test 또는 runResearch → 검증 → resolveProcedure → Result + Evidence`다. SDK v2 `createMcpHandler`와 `@modelcontextprotocol/node`의 `toNodeHandler`를 사용하며 기본 legacy stateless 지원을 유지한다. 세션 DB나 별도 `/sse` 서버는 없다.
 
 procedure는 test와 national_pension_premium_change를 구분한다. 가입 유형 미확인은 질문, 다른 가입 유형은 unsupported, 상황이 확인된 임의가입자는 경로와 근거를 반환하되 needs_verification으로 보류한다. 원문은 요청마다 조회하며 세션 DB·영속 저장·과거 문서의 자동 갱신은 없다. vooy와 공개 터널의 실제 연결 성공은 아직 검증되지 않았다. 실행 및 cloudflared 제약은 [README](../README.md)를 따른다.
 
-## Research 실행과 강제 한도
+## 선택적 내부 Research 실행과 강제 한도
 
 기본 한도: 결정 3라운드, Agent가 제출한 검색 질의/API 요청 4개, 원문 열람 시도 6개(실패 포함), 전체 90초, HTTP 15초(DNS 포함), 모델 요청 30초. 문서당 수신 1 MB·추출 24,000문자, 리다이렉트 3회. 동일 URL 재열람은 금지하고 발견 후보는 최대 24개로 제한한다. 한도는 서버가 검사하며 모델이 늘릴 수 없다. SDK 재시도는 0이다. hosted web_search는 요청당 max_tool_calls=1을 사용한다. 제공자 내부의 질의 재작성·검색 엔진 요청 수까지 제어하는 것은 아니며, maxSearchQueries는 서버가 실행하는 검색 API 요청 수다.
 
@@ -57,9 +70,9 @@ Finding은 이번 source ID와 20~1,500자 인용이 있어야 한다. 서버는
 
 최종 초안의 check/evidence/channel 참조와 관측한 신청 URL을 검사한다. applicationUrl은 실제 읽은 주소나 해당 인용 원문에 관측한 공식 링크여야 하며 안내 페이지를 신청 페이지로 바꾸어 말하지 않도록 문맥도 검토한다. Evidence ID·기관·URL·인용·조회 시각은 Harness가 구성한다. 개인의 신분·인증·권한을 독립 검증하지 못하는 현재 입력 계약에서는 ready/not_ready/use_channel을 차단한다. 이것은 업무별 행정 조건을 하드코딩한 것이 아니라 확정 판단의 증거 경계다.
 
-## 모델과 테스트
+## 선택적 모델과 테스트
 
-OPENAI_API_KEY는 서버 환경에서만 사용하고 OPENAI_MODEL 기본값은 gpt-4.1이다. Responses API와 SDK의 zodTextFormat을 사용한다. 모델 결정 출력은 모든 필드가 필수인 flat object(type, queries, sourceIds, findings, draft, questions)이며 미사용 값은 빈 배열/null이다. 어댑터가 기존 내부 Decision union으로 변환하면서 분기별 필수 값·미사용 필드·HTTPS URL을 검증한다. 모델용 스키마에는 지원되지 않는 URI format을 전송하지 않으며 MCP 출력 계약은 유지한다. review는 기존 필수 필드의 strict object를 사용한다. Agent와 search/inspect/review는 테스트에서만 Fake로 주입한다. 기본 pnpm test는 외부 유료 API를 호출하지 않는다. 실제 검색 성공 여부는 pnpm smoke --live로 별도 검증한다. 구체 설정·공식 문서 링크는 [README](../README.md)를 따른다.
+OPENAI_API_KEY는 서버 환경에서만 사용하고 OPENAI_MODEL 기본값은 gpt-4.1이다. Responses API와 SDK의 zodTextFormat을 사용한다. 모델 결정 출력은 모든 필드가 필수인 flat object(type, queries, sourceIds, findings, draft, questions)이며 미사용 값은 빈 배열/null이다. 어댑터가 기존 내부 Decision union으로 변환하면서 분기별 필수 값·미사용 필드·HTTPS URL을 검증한다. 모델용 스키마에는 지원되지 않는 URI format을 전송하지 않으며 MCP 출력 계약은 유지한다. review는 기존 필수 필드의 strict object를 사용한다. Agent와 search/inspect/review는 테스트에서만 Fake로 주입한다. 기본 pnpm test는 외부 유료 API를 호출하지 않는다. 실제 검색 성공 여부는 pnpm smoke --live로 별도 검증한다. 기본 조회 경로는 pnpm smoke --sources 및 --legacy로 검증한다. test/official-sources.test.ts는 키 없는 신규 도구 HTTP 호출·링크 재열람·안전한 실패·공유 예산을 Fake 원문으로 검증한다. 실제 HTTPS·vooy 상태는 [연결 가이드](vooy-integration.md)를 따른다. 구체 설정·공식 문서 링크는 [README](../README.md)를 따른다.
 
 ## 경계와 공개 데모
 

@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { readSourceOutput, sourceListOutput } from '../src/official-sources.js';
 import { procedureOutput } from '../src/procedure/schema.js';
 
 const live = process.argv.includes('--live');
-const target = process.argv.slice(2).find(value => value !== '--live') ?? 'http://127.0.0.1:3000/mcp';
-const client = new Client({ name: 'before-you-go-smoke', version: '0.1.0' });
+const sources = process.argv.includes('--sources');
+const legacy = process.argv.includes('--legacy');
+const target = process.argv.slice(2).find(value => !value.startsWith('--')) ?? 'http://127.0.0.1:3000/mcp';
+const client = new Client({ name: 'before-you-go-smoke', version: '0.1.0' }, { versionNegotiation: { mode: legacy ? 'legacy' : 'auto' } });
 try {
   await client.connect(new StreamableHTTPClientTransport(new URL(target)));
   const tools = await client.listTools();
-  assert.deepEqual(tools.tools.map(tool => tool.name), ['check_procedure_readiness']);
+  assert.deepEqual(tools.tools.map(tool => tool.name).sort(), ['check_procedure_readiness', 'list_official_procedure_sources', 'read_official_source']);
   console.log('tools/list:', tools.tools.map(tool => tool.name));
   const called = await client.callTool({ name: 'check_procedure_readiness', arguments: { procedure: 'test' } });
   assert.ok(!called.isError);
@@ -21,6 +24,27 @@ try {
     assert.equal(output.status, subscriberType === 'unknown' ? 'needs_information' : 'unsupported');
     assert.deepEqual(JSON.parse((result.content[0] as { text: string }).text), output);
     console.log(`preflight ${subscriberType}:`, output.status);
+  }
+  const seeds = await client.callTool({ name: 'list_official_procedure_sources', arguments: {} });
+  assert.ok(!seeds.isError);
+  assert.deepEqual(JSON.parse((seeds.content[0] as { text: string }).text), seeds.structuredContent);
+  console.log('official source starting points: passed (historical list, not a live read)');
+  const blocked = await client.callTool({ name: 'read_official_source', arguments: { url: 'https://localhost/' } });
+  assert.equal(blocked.isError, true);
+  assert.equal(JSON.parse((blocked.content[0] as { text: string }).text).error.code, 'blocked_url');
+  console.log('blocked URL: rejected');
+  if (sources) {
+    const startingPoints = sourceListOutput.parse(seeds.structuredContent).sources;
+    const result = await client.callTool({ name: 'read_official_source', arguments: { url: startingPoints[0].url } });
+    if (result.isError) {
+      console.error('Official source read failed:', result.content);
+      process.exitCode = 1;
+    } else {
+      const output = readSourceOutput.parse(result.structuredContent);
+      assert.deepEqual(JSON.parse((result.content[0] as { text: string }).text), output);
+      assert.match(output.text, /기준소득월액/);
+      console.log('Live official source (no OpenAI):', JSON.stringify(output, null, 2));
+    }
   }
   if (live) {
     const result = await client.callTool({ name: 'check_procedure_readiness', arguments: {
