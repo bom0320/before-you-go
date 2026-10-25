@@ -286,3 +286,49 @@ test('missing API key is a real configuration failure, without attempting provid
   try { assert.throws(() => createResearcher(), error => error instanceof ResearchError && error.code === 'missing_api_key'); }
   finally { if (previous === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previous; }
 });
+
+
+test('model diagnostics distinguish failures for decide and review without exposing API or user content', async t => {
+  const logs: string[] = [];
+  t.mock.method(console, 'error', (...args: unknown[]) => logs.push(args.join(' ')));
+  const privateText = 'PRIVATE_USER_PROMPT_01012345678';
+  const context: ResearchContext = { input: { ...businessInput, goal: privateText }, candidates: [], sources: [{ id: 'source-1', url: 'https://nps.or.kr/test', text: fixtureText, links: [], retrievedAt: '2026-10-25T00:00:00.000Z' }], failures: [], feedback: [], remaining: { rounds: 2, searches: 4, inspections: 6 } };
+  for (const operation of ['decide', 'review'] as const) {
+    for (const scenario of ['api', 'incomplete', 'missing', 'invalid', 'connection'] as const) {
+      logs.length = 0;
+      const client = new OpenAI({ apiKey: 'sk-secret-test-key', maxRetries: 0, fetch: async () => {
+        if (scenario === 'connection') throw new Error(privateText);
+        if (scenario === 'api') return new Response(JSON.stringify({ error: {
+          code: 'invalid_json_schema', message: `Invalid schema: 'anyOf' is not permitted. ${privateText} sk-secret-test-key Authorization: Bearer secret`,
+          type: 'invalid_request_error',
+        } }), { status: 400, headers: { 'content-type': 'application/json', authorization: 'Bearer secret' } });
+        let output: unknown = apiMessage({});
+        if (scenario === 'incomplete') output = { ...apiMessage({}), status: 'incomplete', output: [], incomplete_details: { reason: 'max_output_tokens' } };
+        if (scenario === 'missing') output = { ...apiMessage({}), output: [] };
+        return new Response(JSON.stringify(output), { headers: { 'content-type': 'application/json' } });
+      } });
+      const dependencies = createResearcher(client);
+      await assert.rejects(operation === 'decide'
+        ? dependencies.decide(context, new AbortController().signal)
+        : dependencies.review(context, fixtureCompletion(context), new AbortController().signal), (error: unknown) => {
+          assert.ok(error instanceof ResearchError);
+          assert.equal(error.code, operation === 'decide' ? 'model_failed' : 'review_failed');
+          assert.ok(!error.message.includes(privateText));
+          return true;
+        });
+      assert.equal(logs.length, 1);
+      const diagnostic = JSON.parse(logs[0].slice('[research:model] '.length));
+      assert.equal(diagnostic.operation, operation);
+      assert.equal(diagnostic.stage, ({ api: 'api_request', connection: 'api_request', incomplete: 'response_not_completed', missing: 'output_missing', invalid: 'sdk_output_parse' })[scenario]);
+      if (scenario === 'api') {
+        assert.equal(diagnostic.status, 400);
+        assert.equal(diagnostic.code, 'invalid_json_schema');
+        assert.equal(diagnostic.name, 'BadRequestError');
+        assert.equal(diagnostic.schemaKeyword, 'anyOf');
+        assert.match(diagnostic.message, /schema was rejected/);
+      }
+      if (scenario === 'incomplete') assert.equal(diagnostic.incompleteReason, 'max_output_tokens');
+      assert.doesNotMatch(logs[0], /PRIVATE_USER|01012345678|sk-secret|Authorization|Bearer|instructions|proposedCompletion/);
+    }
+  }
+});
