@@ -127,4 +127,4 @@ NPS-001~011의 조사 목적과 ID를 유지한다. verified로 표시한 NPS-00
 4. 도구 응답에는 적용한 verified 사실만 evidence로 제공한다. pending ID를 확정 근거처럼 인용하지 않는다.
 5. 근거 변경 시 관련 규칙·테스트·문서를 함께 검토한다. 검증이 끝날 때까지 관련 판단은 needs_verification으로 남긴다.
 
-목표 응답과 상태 정의는 [tool-contract.md](tool-contract.md), 현재 미구현 범위는 [architecture.md](architecture.md)를 따른다.
+목표 응답과 상태 정의는 [tool-contract.md](tool-contract.md), 현재 구현과 미구현 범위는 [architecture.md](architecture.md)를 따른다.

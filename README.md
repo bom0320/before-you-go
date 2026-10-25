@@ -8,7 +8,7 @@
 
 목표 MVP는 **국민연금 임의가입자의 보험료 변경 절차 안내와 사전 점검**입니다. 본인·가족 신청 의향·가입 유형 미확인·전화 연결 실패를 고려하며, 실제 신청 제출·승인·본인 인증·결제·정부기관 계정 연동은 제외합니다.
 
-현재는 TypeScript/Node.js 및 공식 MCP SDK v2 기반 `/mcp` Streamable HTTP와 테스트 도구 한 개만 구현했습니다. 아래 임시 계약만 실행할 수 있으며, 업무 판단·신청 경로 및 대안 안내는 아직 구현하지 않았습니다. 프론트엔드·DB·로그인도 없습니다.
+현재 TypeScript/Node.js 및 공식 MCP SDK v2 기반 `/mcp`의 도구 한 개가 통신 검증과 실제 업무 입력을 모두 받습니다. 정적 verified 자료로 본인·가족·가입 유형 미확인 상황을 구분하고, 공식 경로·웹 진입 URL·추가 확인 사항을 반환합니다. 사용자별 이용 조건이 pending이므로 `ready`, `not_ready`, `use_channel`은 반환하지 않습니다. 실제 접수·인증·외부 조회 기능, 프론트엔드·DB·로그인은 없습니다.
 
 ## 실행
 
@@ -24,13 +24,13 @@ pnpm dev
 
 ## 도구와 검증
 
-`check_procedure_readiness`의 입력:
+`check_procedure_readiness`의 기존 통신 검증 입력:
 
 ```json
 { "procedure": "test" }
 ```
 
-Zod strict object로 검증하며 다른 업무명, 타입, 추가 필드를 거부합니다.
+procedure를 기준으로 Zod strict object 분기를 검증하며 알 수 없는 업무·타입·추가 필드를 거부합니다. test 분기는 기존대로 procedure만 받습니다.
 성공 시 `content`의 JSON 텍스트와 동일한 `structuredContent`를 반환합니다.
 
 ```json
@@ -41,6 +41,25 @@ Zod strict object로 검증하며 다른 업무명, 타입, 추가 필드를 거
 }
 ```
 
+실제 업무 호출 입력 예시(전화 연결 실패):
+
+```json
+{
+  "procedure": "national_pension_premium_change",
+  "subscriberType": "voluntary",
+  "applicant": "self",
+  "changeGoal": "increase",
+  "unavailableChannel": "phone"
+}
+```
+
+이 경우 `needs_verification`과 전화·온라인·모바일·방문의 공식 경로 목록을 반환합니다.
+전화의 현재 어려움을 법적 신청 불가로 판단하지 않습니다. 온라인에는 검증된 웹 진입 URL을 제공하지만
+인증·권한·구비서류 조건은 `unverified`로 남기며, 다음 행동은 대체 경로 후보의 공식 정보 확인입니다.
+가입 유형 미확인은 `needs_information`, other는 `unsupported`입니다. 가입 유형 → 실제 신청 주체 → 희망 변경 방향 순서로
+부족한 상황을 질문합니다. unavailableChannel 생략은 질문 사유가 아닙니다. 입력 범주 외 개인정보를 보내지 마세요.
+전체 응답 필드는 [도구 계약](docs/tool-contract.md)에 정의되어 있습니다.
+
 ```sh
 pnpm typecheck
 pnpm test
@@ -50,9 +69,9 @@ pnpm smoke
 pnpm smoke https://YOUR-HOST/mcp
 ```
 
-`smoke`는 공식 SDK 클라이언트로 initialize 후 `tools/list`, `tools/call`을 호출하고 결과를 출력·검증합니다.
+`smoke`는 공식 SDK 클라이언트로 initialize 후 `tools/list`, 기존 test 및 업무 A~D의 `tools/call`을 호출하고 결과를 출력·검증합니다.
 `test`는 실제 임시 HTTP 포트에서 기존 프로토콜(legacy) 및 최신 프로토콜(auto)의 도구 목록·호출,
-잘못된 입력 거부, Host/Origin 검증, 404를 확인합니다. 소켓 실행이 가능한 환경이 필요합니다.
+업무 A~D와 잘못된 입력 거부, Host/Origin 검증, 404를 확인합니다. 순수 함수 테스트는 전체 입력 조합과 근거·조건 참조, pending 근거 제외 및 미검증 경로 추천 금지를 검증합니다. 소켓 실행이 가능한 환경이 필요합니다.
 브라우저 주소창의 GET은 MCP 도구 호출이 아닙니다. stateless 기존 프로토콜에서 GET/DELETE의 405는 정상입니다.
 
 vooy에서는 전송 방식으로 **Streamable HTTP**, 서버 URL로 `https://YOUR-HOST/mcp`를 지정합니다.
@@ -78,7 +97,7 @@ pnpm smoke https://YOUR-HOST/mcp
 Origin 없는 서버 클라이언트는 허용됩니다. 기본 Origin 허용 목록은 로컬 호스트이며,
 브라우저 클라이언트가 필요하면 `ALLOWED_ORIGINS`에 그 클라이언트의 정확한 호스트명을 쉼표로 지정합니다.
 SDK Origin 검증은 호스트 기준이며 포트를 구분하지 않습니다. CORS는 별도로 제공하지 않습니다.
-인증 없는 공개 데모이므로 테스트 입력만 사용하세요. 서버는 요청 본문·헤더를 로그로 남기지 않으며,
+인증 없는 공개 데모이므로 개인정보 없는 범주 입력만 사용하세요. 서버는 요청 본문·헤더를 로그로 남기지 않으며,
 외부 데이터 조회·파일 접근·쓰기 작업을 수행하는 도구를 노출하지 않습니다. 종료할 때 터널도 중단합니다.
 
 ## 관련 설계 문서
@@ -89,6 +108,6 @@ SDK Origin 검증은 호스트 기준이며 포트를 구분하지 않습니다.
 4. [공식 자료와 검증 상태](docs/sources.md)
 5. [현재 구조와 목표 아키텍처](docs/architecture.md)
 
-개발 규칙은 [AGENTS.md](AGENTS.md)를 따릅니다. 목표 업무 계약은 아직 미구현이며, 공식 행정 근거는 pending입니다.
+개발 규칙은 [AGENTS.md](AGENTS.md)를 따릅니다. 업무 계약을 구현했으며, 사용하는 공식 사실과 남은 pending 조건은 [sources.md](docs/sources.md)에서 구분합니다. HTTPS 공개 및 vooy Recipe Studio 설정은 별도 단계입니다.
 문제 정의 11개 섹션의 원문은 저장소에 없어 problem-definition.md에 누락 상태와 이번 요청의 배경을 구분해 기록했습니다.
 패키지 버전은 package.json과 pnpm-lock.yaml을 기준으로 합니다.

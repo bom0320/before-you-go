@@ -4,6 +4,7 @@ import { get } from 'node:http';
 import { test } from 'node:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createHttpServer } from '../src/http.js';
+import { procedureOutput } from '../src/procedure/schema.js';
 
 test('HTTP MCP: legacy and modern clients, validation and HTTP guards', async t => {
   const server = createHttpServer();
@@ -29,8 +30,35 @@ test('HTTP MCP: legacy and modern clients, validation and HTTP guards', async t 
         assert.ok(!result.isError);
         assert.equal((result.structuredContent as Record<string, unknown>)?.mode, 'test');
         assert.equal((result.structuredContent as Record<string, unknown>)?.status, 'not_evaluated');
+        assert.deepEqual(result.structuredContent, {
+          mode: 'test', status: 'not_evaluated',
+          message: 'MCP 도구 호출 성공. 명시적인 테스트 응답이며 실제 행정 업무 준비 상태는 평가하지 않았습니다.',
+        });
         assert.deepEqual(JSON.parse((result.content[0] as { text: string }).text), result.structuredContent);
-        for (const args of [{}, { procedure: 123 }, { procedure: 'pension' }, { procedure: 'test', secret: 'unused' }]) {
+        assert.equal(tools[0].outputSchema?.type, 'object');
+        assert.match(JSON.stringify(tools[0].inputSchema), /national_pension_premium_change/);
+        const cases = [
+          { input: { subscriberType: 'unknown' }, status: 'needs_information' },
+          { input: { subscriberType: 'voluntary', applicant: 'self', changeGoal: 'increase', unavailableChannel: 'phone' }, status: 'needs_verification' },
+          { input: { subscriberType: 'voluntary', applicant: 'family', changeGoal: 'increase', unavailableChannel: 'phone' }, status: 'needs_verification' },
+          { input: { subscriberType: 'other', applicant: 'self' }, status: 'unsupported' },
+        ];
+        for (const scenario of cases) {
+          const called = await client.callTool({ name: 'check_procedure_readiness', arguments: {
+            procedure: 'national_pension_premium_change', ...scenario.input,
+          } });
+          assert.ok(!called.isError);
+          const output = procedureOutput.parse(called.structuredContent);
+          assert.equal(output.status, scenario.status);
+          assert.deepEqual(JSON.parse((called.content[0] as { text: string }).text), output);
+          assert.ok(output.nextActions.every(action => action.kind !== 'use_channel'));
+          if (scenario.status === 'needs_verification') assert.equal(output.channels.length, 4);
+        }
+        for (const args of [{}, { procedure: 123 }, { procedure: 'pension' }, { procedure: 'test', secret: 'unused' },
+          { procedure: 'national_pension_premium_change', subscriberType: 'employee' },
+          { procedure: 'national_pension_premium_change', unavailableChannel: 'fax' },
+          { procedure: 'national_pension_premium_change', applicant: null },
+          { procedure: 'national_pension_premium_change', name: 'not-collected' }]) {
           const invalid = await client.callTool({ name: 'check_procedure_readiness', arguments: args });
           assert.equal(invalid.isError, true);
         }

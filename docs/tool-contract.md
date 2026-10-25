@@ -4,11 +4,11 @@
 
 국민연금 임의가입자의 보험료 변경 절차와 준비 사항을 공식 근거로 사전 점검한다. 현재 경로가 막혔을 때 검증된 다른 경로와 다음 행동을 안내한다. 문제 배경은 [problem-definition.md](problem-definition.md), 제품 범위는 [brief.md](brief.md)를 따른다. 실제 접수·승인·본인 인증을 수행하지 않는다.
 
-**현재 계약**과 **목표 업무 계약**은 다르다. 아래 목표 계약은 다음 구현의 설계 기준이며 현재 서버에 전송하면 입력 오류가 발생한다. 이번 문서 작업은 도구를 변경하지 않는다.
+**현재 도구는 기존 test 계약과 아래 업무 계약을 모두 구현한다.** 업무 분기는 정적 verified 사실로 질문·공식 경로·미확인 조건을 반환한다. 현재 자료로는 사용자별 조건의 완전성을 검증할 수 없어 ready·not_ready·use_channel은 반환하지 않는다. 상태의 나머지 정의는 후속 검증에 대비한 계약으로 유지한다.
 
 ## 현재 통신 검증 계약
 
-입력은 추가 속성을 허용하지 않는 `{ "procedure": "test" }`뿐이다. 출력은 다음이며 `content`의 JSON 텍스트와 `structuredContent`가 동일하다.
+통신 검증 분기의 입력은 추가 속성을 허용하지 않는 `{ "procedure": "test" }`다. 출력은 다음이며 `content`의 JSON 텍스트와 `structuredContent`가 동일하다.
 
 ```json
 {
@@ -20,9 +20,9 @@
 
 `not_evaluated`는 업무용 준비 상태가 아니다. 현재 입력 오류는 SDK 도구 오류(`isError: true`)로 반환하며, HTTP 및 프로토콜 오류와 구분한다. 현재 실행 및 검증 명령은 [README](../README.md)에 있다.
 
-## 목표 Input Schema — 미구현
+## 업무 Input Schema — 구현됨
 
-JSON object이며 아래 속성만 허용한다. 다음 업무 구현에서는 같은 도구명을 유지하고 `procedure`를 판별자로 test와 업무 입력을 구분하는 계약을 사용한다. 기존 test 입출력은 유지한다. 업무 입력은 아래 스키마를 적용하고 문서·테스트·README를 함께 갱신한다. 현재는 test 분기만 구현되어 있다.
+JSON object이며 아래 속성만 허용한다. 같은 도구에서 procedure 판별 Zod union으로 test와 업무 입력을 구분한다. 기존 test 입출력은 유지하며 test 입력에는 업무 필드를 허용하지 않는다. SDK가 tools/list에 두 object 분기를 노출한다.
 
 | 필드 | 타입 / 값 | 필수 여부와 의미 |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ JSON object이며 아래 속성만 허용한다. 다음 업무 구현에서는 �
 
 subscriberType·applicant·changeGoal의 생략은 `unknown`과 같이 취급한다. unavailableChannel의 생략은 “보고된 어려운 경로 없음”이며 모든 경로가 이용 가능하다는 뜻은 아니다. 이 필드는 질문의 필수 대상이 아니다. 복수 경로와 실패 사유 자유 서술은 MVP에서 추가하지 않는다. 이 입력들은 대화와 분기 처리를 위한 제품 모델이며 행정기관이 요구하는 신청 항목 목록이 아니다. 구체 금액·나이·소득·관계 상세·서류 보유 여부는 공식 절차에서 판단 필요성이 확인된 뒤 최소 범위로 추가한다. 이름·주민등록번호·연락처·계정·자유 서술·증빙 파일은 받지 않는다.
 
-## 목표 Output Schema — 미구현
+## 업무 Output Schema — 구현됨
 
 `structuredContent`는 다음 필드를 모두 포함하고, `content`에는 동일한 객체를 JSON 텍스트로 제공한다. 빈 정보는 배열 `[]`로 표시한다. 아래 배열 객체에 정의된 필드는 모두 필수이며, 정의하지 않은 속성은 허용하지 않는다. enum·배열·null로 별도 표기하지 않은 id·설명·질문·기관·사실·scope 등은 비어 있지 않은 문자열이다. evidenceIds와 checkIds는 중복 없는 문자열 배열이고 evidence id는 응답 내 고유하다.
 
@@ -139,9 +139,9 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 
 근거가 없으면 needs_verification과 확인할 사항을 반환한다. 기관 문의·접수 채널의 이름, 전화번호, 구비 서류, 위임 요건, 기한·금액 역시 공식 근거 확인 전에는 만들어 넣지 않는다.
 
-## Example Requests / Responses — 목표 계약, 실행 불가
+## Example Requests / Responses — 실행 가능한 업무 호출
 
-예시는 상태 처리 설명을 위한 것이며 행정 규칙의 증거가 아니다. verified 자료가 없어 실제 신청 경로나 링크를 만들어 넣지 않는다.
+아래는 현재 업무 입력과 주요 결과다. 설명 자체는 행정 규칙의 증거가 아니며 실제 evidence는 sources.md의 verified 사실만 포함한다. 외부 신청 제출이나 인증은 수행하지 않는다.
 
 ### 가입 유형 미확인
 
@@ -156,11 +156,11 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 {
   "mode": "procedure_check",
   "status": "needs_information",
-  "summary": "가입 유형을 먼저 확인해야 합니다.",
+  "summary": "사용자 상황을 먼저 확인해야 합니다.",
   "missingInformation": [
     {
       "field": "subscriberType",
-      "question": "현재 국민연금 가입 유형이 임의가입자인지 알고 계신가요?"
+      "question": "현재 국민연금 가입 유형이 임의가입자인지 알고 계신가요? 모르면 모른다고 알려주세요."
     }
   ],
   "uncertainties": [],
@@ -169,7 +169,7 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
   "nextActions": [
     {
       "kind": "answer_question",
-      "instruction": "알고 있는 가입 유형을 알려주세요. 모르면 모른다고 답해 주세요.",
+      "instruction": "현재 국민연금 가입 유형이 임의가입자인지 알고 계신가요? 모르면 모른다고 알려주세요.",
       "evidenceIds": [],
       "channelId": null
     }
@@ -191,33 +191,9 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 }
 ```
 
-현재 출처가 모두 pending인 상태에서의 목표 응답:
+현재는 경로의 존재와 웹 진입점이 검증되어 네 경로와 근거를 반환한다. 사용자별 조건은 미확인이라 needs_verification이며 use_channel은 없다:
 
-```json
-{
-  "mode": "procedure_check",
-  "status": "needs_verification",
-  "summary": "임의가입자 본인의 보험료 변경 절차에 대한 공식 근거 확인이 필요합니다.",
-  "missingInformation": [],
-  "uncertainties": [
-    {
-      "code": "source_pending",
-      "message": "변경 가능 범위와 접수 절차를 아직 검증하지 않았습니다."
-    }
-  ],
-  "checks": [],
-  "channels": [],
-  "nextActions": [
-    {
-      "kind": "verify_official_information",
-      "instruction": "국민연금공단 공식 자료에서 본인 변경 요건과 절차를 확인해야 합니다.",
-      "evidenceIds": [],
-      "channelId": null
-    }
-  ],
-  "evidence": []
-}
-```
+응답: `needs_verification`. `channels`에 phone·online·mobile·visit를 표시하고, 온라인 applicationUrl과 인증 필요 근거를 포함한다. 경로별 조건은 unverified이며, 다음 행동은 공식 정보 확인이다. 준비 사항 전체의 충족이나 신청 가능성을 확정하지 않는다.
 
 가족 요청 예시:
 
@@ -230,33 +206,9 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 }
 ```
 
-```json
-{
-  "mode": "procedure_check",
-  "status": "needs_verification",
-  "summary": "가족의 대리 신청 가능 여부는 확인되지 않았습니다.",
-  "missingInformation": [],
-  "uncertainties": [
-    {
-      "code": "source_pending",
-      "message": "해당 변경의 허용 범위, 대리 신청 가능 여부와 요건을 검증해야 합니다."
-    }
-  ],
-  "checks": [],
-  "channels": [],
-  "nextActions": [
-    {
-      "kind": "verify_official_information",
-      "instruction": "국민연금공단 공식 자료에서 해당 업무의 대리 처리 가능 여부와 조건을 확인해야 합니다.",
-      "evidenceIds": [],
-      "channelId": null
-    }
-  ],
-  "evidence": []
-}
-```
+응답: `needs_verification`. 네 경로를 표시하고 `applicant-authority` check를 `unverified`로 반환한다. NPS-003-01의 조문 범위만 설명하며 가족 권한을 인정하지 않는다. 다음 행동은 경로별 대리 허용·권한·준비 조건의 공식 확인이다.
 
-### 전화 연결 실패 — 현재 verified 자료 없음
+### 전화 연결 실패 — 검증된 경로와 확인할 조건
 
 ```json
 {
@@ -268,30 +220,19 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 }
 ```
 
-```json
-{
-  "mode": "procedure_check",
-  "status": "needs_verification",
-  "summary": "전화 연결이 어려운 상황을 반영했습니다. 다른 신청 경로는 공식 확인이 필요합니다.",
-  "missingInformation": [],
-  "uncertainties": [
-    { "code": "source_pending", "message": "이 업무의 전화 신청 경로 존재와 온라인·모바일·방문 대안의 존재 및 적용 조건을 아직 검증하지 않았습니다." }
-  ],
-  "checks": [],
-  "channels": [],
-  "nextActions": [
-    {
-      "kind": "verify_official_information",
-      "channelId": null,
-      "instruction": "임의가입자 본인의 해당 변경을 처리할 수 있는 다른 경로와 조건을 국민연금공단 공식 자료에서 확인해야 합니다.",
-      "evidenceIds": []
-    }
-  ],
-  "evidence": []
-}
-```
+응답: `needs_verification`. 다음 항목을 반환한다.
 
-검증 이후 구현에서 반드시 확인할 분기(행정 사실이 아닌 테스트 조건):
+| 필드 | 실제 동작 |
+| --- | --- |
+| channels | phone·online·mobile·visit. phone도 존재가 검증됐으므로 목록에는 유지 |
+| online.applicationUrl | `https://www.nps.or.kr/elctcvlcpt/dclraply/getOHAC0036M0.do` |
+| checks | 사용자 진술 기준 안내 대상만 satisfied. 변경 방향·신청 주체·준비 사항·경로별 조건은 unverified |
+| nextActions | phone 외 경로 후보에 verify_official_information. 인증·권한·준비 조건 확인 안내이며 use_channel은 없음 |
+| evidence | 실제 참조한 verified 사실만 포함. pending ID 없음 |
+
+웹 주소는 로그인 필요 안내까지 확인한 진입점이며, 인증 후 양식이나 개인의 이용 가능성까지 검증한 것이 아니다.
+
+회귀 테스트와 후속 검증에서 유지할 분기(행정 사실이 아닌 테스트 조건):
 
 | 조건 | 기대 동작 |
 | --- | --- |
@@ -302,7 +243,7 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 
 ## 구현 전환 순서
 
-공식 사실과 경로별 조건 검증 → 최소 Procedure Data 및 순수 점검 함수 → test 분기를 유지한 Zod 업무 계약 등록 → 도구 응답 매핑 → 경로 세 축·상태·근거 참조 테스트 → typecheck/test 및 tools/list·tools/call → 실제 vooy/HTTPS 연결 검증. 이 문서 단계에서는 어느 것도 구현하지 않는다.
+정적 Procedure Data, 순수 점검 함수, test/업무 Zod 분기 및 MCP 매핑을 구현했다. 질문은 가입 유형 → 실제 신청 주체 → 변경 방향 순서로 반환한다. A~D와 전체 범주 조합, 경로·근거 참조, legacy/modern MCP 호출을 테스트한다. 후속 작업은 경로별 이용 조건의 공식 검증이며 HTTPS 배포와 실제 vooy 연결은 별도 단계다.
 
 ## Error Cases
 
@@ -317,4 +258,4 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 | `/mcp` 외 경로 | 현재 HTTP 계층에서 404 |
 | 내부 처리 실패 | 성공 응답으로 위장하지 않고 민감 정보·스택을 노출하지 않음 |
 
-도메인 점검의 불확실성과 서버 장애를 같은 상태로 합치지 않는다. 새 업무 계약 구현 시 오류 형식도 SDK의 실제 동작으로 검증한다.
+도메인 점검의 불확실성과 서버 장애를 같은 상태로 합치지 않는다. 업무 입력 오류 형식도 SDK 클라이언트의 실제 HTTP 호출로 검증한다.
