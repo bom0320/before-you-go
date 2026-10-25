@@ -5,9 +5,11 @@ import { test } from 'node:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createHttpServer } from '../src/http.js';
 import { procedureOutput } from '../src/procedure/schema.js';
+import { runResearch } from '../src/research/run-research.js';
+import { fixtureDependencies } from './research-fixtures.js';
 
 test('HTTP MCP: legacy and modern clients, validation and HTTP guards', async t => {
-  const server = createHttpServer();
+  const server = createHttpServer({ research: (input, signal) => runResearch(input, { dependencies: fixtureDependencies(), signal }) });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();
@@ -52,7 +54,10 @@ test('HTTP MCP: legacy and modern clients, validation and HTTP guards', async t 
           assert.equal(output.status, scenario.status);
           assert.deepEqual(JSON.parse((called.content[0] as { text: string }).text), output);
           assert.ok(output.nextActions.every(action => action.kind !== 'use_channel'));
-          if (scenario.status === 'needs_verification') assert.equal(output.channels.length, 4);
+          if (scenario.status === 'needs_verification') {
+            assert.equal(output.channels.length, 1);
+            assert.ok(output.evidence.every(item => item.sourceId && item.quote));
+          }
         }
         for (const args of [{}, { procedure: 123 }, { procedure: 'pension' }, { procedure: 'test', secret: 'unused' },
           { procedure: 'national_pension_premium_change', subscriberType: 'employee' },
@@ -74,4 +79,27 @@ test('HTTP MCP: legacy and modern clients, validation and HTTP guards', async t 
     }).on('error', reject);
   });
   assert.equal(hostStatus, 403);
+});
+
+test('technical research failures are MCP tool errors, not domain results or static evidence', async () => {
+  const { ResearchError } = await import('../src/research/schema.js');
+  const server = createHttpServer({ research: async () => { throw new ResearchError('missing_api_key', 'OPENAI_API_KEY가 없습니다.'); } });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const address = server.address(); assert.ok(address && typeof address !== 'string');
+  const client = new Client({ name: 'error-test', version: '1' });
+  try {
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${address.port}/mcp`)));
+    const result = await client.callTool({ name: 'check_procedure_readiness', arguments: {
+      procedure: 'national_pension_premium_change', subscriberType: 'voluntary', applicant: 'self', changeGoal: 'increase',
+    } });
+    assert.equal(result.isError, true);
+    assert.equal(result.structuredContent, undefined);
+    const output = JSON.parse((result.content[0] as { text: string }).text);
+    assert.equal(output.error.code, 'missing_api_key');
+    assert.equal(output.status, undefined);
+    assert.equal(output.evidence, undefined);
+  } finally {
+    await client.close(); server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
 });

@@ -16,6 +16,10 @@
   "dependencies": {
     "@modelcontextprotocol/node": "^2.1.2",
     "@modelcontextprotocol/server": "^2.4.0",
+    "cheerio": "^1.2.0",
+    "ipaddr.js": "^2.5.0",
+    "openai": "^7.43.0",
+    "undici": "^7.30.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {

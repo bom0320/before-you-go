@@ -28,7 +28,7 @@ Verified, Not Guessed / Ask Before Assuming / Actionable Guidance / Clear Respon
 
 MVP는 국민연금 **임의가입자의 보험료 변경 절차 안내와 사전 점검**으로 제한한다. 입력 검증, 상황별 질문, 요건·준비 사항 대조, 신청 경로와 적용 조건, 전화 연결 실패 시 검증된 대체 경로, 출처 및 다음 행동을 제공하는 것이 목표다. 실제 업무 규칙은 공식 자료 확인 후 구현한다.
 
-현재 `/mcp` 도구 한 개에 기존 test 분기와 업무 점검 분기를 구현했다. 정적 verified 자료로 경로 존재·웹 진입점과 확인할 조건을 안내한다. 사용자별 조건은 아직 미검증이므로 ready·use_channel 추천은 보류한다. 실행 방법은 [README](../README.md)를 따른다.
+현재 `/mcp` 도구 한 개에 기존 test 분기와 업무 점검 분기를 구현했다. Research Agent가 공식 자료를 검색하고 서버가 직접 읽은 원문으로 경로·진입점·확인할 조건을 조사한다. 현재 입력만으로 개인의 신분·인증·대리 권한 전체를 독립 검증할 수 없어 ready·not_ready·use_channel은 보류한다. 키·검색 API 장애는 도구 오류로 구분한다. 실행 방법은 [README](../README.md)를 따른다.
 
 ## Non-Goals
 

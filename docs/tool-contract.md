@@ -4,7 +4,7 @@
 
 국민연금 임의가입자의 보험료 변경 절차와 준비 사항을 공식 근거로 사전 점검한다. 현재 경로가 막혔을 때 검증된 다른 경로와 다음 행동을 안내한다. 문제 배경은 [problem-definition.md](problem-definition.md), 제품 범위는 [brief.md](brief.md)를 따른다. 실제 접수·승인·본인 인증을 수행하지 않는다.
 
-**현재 도구는 기존 test 계약과 아래 업무 계약을 모두 구현한다.** 업무 분기는 정적 verified 사실로 질문·공식 경로·미확인 조건을 반환한다. 현재 자료로는 사용자별 조건의 완전성을 검증할 수 없어 ready·not_ready·use_channel은 반환하지 않는다. 상태의 나머지 정의는 후속 검증에 대비한 계약으로 유지한다.
+**현재 도구는 기존 test 계약과 아래 업무 계약을 모두 구현한다.** 업무 분기는 Research Agent가 조사하고 서버가 직접 읽어 검증한 원문으로 질문·공식 경로·미확인 조건을 반환한다. 정적 스냅샷은 실시간 근거로 쓰지 않는다. 현재 구조화 입력만으로 신분·인증·권한의 완전성을 독립 검증할 수 없어 ready·not_ready·use_channel은 반환하지 않는다. 상태의 나머지 정의는 후속 검증에 대비한 계약으로 유지한다.
 
 ## 현재 통신 검증 계약
 
@@ -27,6 +27,7 @@ JSON object이며 아래 속성만 허용한다. 같은 도구에서 procedure �
 | 필드 | 타입 / 값 | 필수 여부와 의미 |
 | --- | --- | --- |
 | `procedure` | `"national_pension_premium_change"` | 필수. 점검할 업무의 내부 식별자 |
+| `goal` | 문자열 1~300자 (trim) | 선택. 행정 목표 또는 가입 유형 확인 방법 질문. 개인정보 금지. 구조화된 값을 덮어쓰지 않음 |
 | `subscriberType` | `"voluntary"`, `"other"`, `"unknown"` | 선택. 사용자 진술 기준 가입 유형. other는 현재 지원 밖 유형을 묶는 값 |
 | `applicant` | `"self"`, `"family"`, `"unknown"` | 선택. 실제 신청 예정자가 가입자 본인(self)인지 가족(family)인지. 대화하는 사람과 구분하며 family는 권한 확인을 뜻하지 않음 |
 | `changeGoal` | `"increase"`, `"decrease"`, `"unknown"` | 선택. 사용자가 원하는 방향이며 허용 가능한 변경 방향을 선언하는 값이 아님 |
@@ -43,14 +44,14 @@ subscriberType·applicant·changeGoal의 생략은 `unknown`과 같이 취급한
 | `mode` | `"procedure_check"` |
 | `status` | 아래 Status Semantics의 값 |
 | `summary` | 사용자에게 보여줄 짧은 설명 문자열 |
-| `missingInformation` | `{ field, question }[]`. field는 선택 입력 필드명, question은 구체적 질문 |
-| `uncertainties` | `{ code, message }[]`. code는 `source_pending`, `source_conflict`, `source_outdated`, `outside_scope` 중 하나 |
+| `missingInformation` | `{ field, question }[]`. field는 goal을 포함한 선택 입력 필드명, question은 구체적 질문 |
+| `uncertainties` | `{ code, message }[]`. code는 `source_pending`, `source_conflict`, `source_outdated`, `outside_scope`, `research_limit`, `source_unavailable`, `evidence_rejected` 중 하나 |
 | `checks` | `{ id, outcome, explanation, evidenceIds }[]`. outcome은 `satisfied`, `not_satisfied`, `unverified` 중 하나. evidenceIds는 사실 ID 문자열 배열 |
 | `channels` | `{ id, type, checkIds, applicationUrl, cautions, evidenceIds }[]`. 공식적인 존재가 verified인 신청 경로만 포함. 세부 정의는 아래 참조 |
 | `nextActions` | `{ kind, channelId, instruction, evidenceIds }[]`. kind는 `answer_question`, `verify_official_information`, `prepare`, `use_channel` 중 하나. channelId는 channels의 id 또는 null |
-| `evidence` | `{ id, institution, url, fact, scope, verifiedAt }[]`. verifiedAt은 YYYY-MM-DD, url은 공식 HTTPS 페이지의 직접 URL |
+| `evidence` | `{ id, institution, url, fact, scope, verifiedAt }[]`. verifiedAt은 YYYY-MM-DD, url은 이번 실행에서 직접 읽은 공식 최종 HTTPS URL. 동적 결과는 sourceId·quote(20~1500자)·retrievedAt(ISO timestamp)도 포함 |
 
-`checks`는 검증된 규칙의 점검 또는 명시적인 확인 보류 항목만 생성한다. `unverified`는 규칙의 적용 여부 등을 확정할 수 없을 때 사용하며 evidenceIds가 비어 있을 수 있다. 이를 확정 요건처럼 설명하지 않는다. `satisfied`·`not_satisfied`, `prepare`·`use_channel` 안내는 적용 가능한 검증 근거를 하나 이상 참조한다. 질문이나 공식 자료 확인 요청은 근거 배열이 비어 있을 수 있다. 반환 evidence는 참조된 verified 사실만 포함한다.
+`checks`는 검증된 규칙의 점검 또는 명시적인 확인 보류 항목만 생성한다. `unverified`는 규칙의 적용 여부 등을 확정할 수 없을 때 사용하며 evidenceIds가 비어 있을 수 있다. 이를 확정 요건처럼 설명하지 않는다. `satisfied`·`not_satisfied`, `prepare`·`use_channel` 안내는 적용 가능한 검증 근거를 하나 이상 참조한다. 질문이나 공식 자료 확인 요청은 근거 배열이 비어 있을 수 있다. 반환 evidence는 참조된 이번 실행의 검증 사실만 포함한다. 검색 요약, 읽지 않은 URL, 과거 NPS-* ID를 새로운 실행 근거로 반환하지 않는다.
 
 ## 경로와 다음 행동의 계약
 
@@ -129,19 +130,19 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 
 ## Missing Information Handling
 
-먼저 가입 유형, 다음 신청 주체를 확인한다. 변경 방향은 해당 분기에서 필요한 경우 묻고, 필요성을 확인하기 전 추가 개인 정보를 요구하지 않는다. 질문은 한 번에 답할 수 있도록 구체적으로 작성하고 이미 받은 정보는 다시 묻지 않는다.
+goal이 없으면 먼저 가입 유형, 다음 신청 주체를 확인한다. goal이 있으면 Agent가 상황 질문과 필요한 확인 방법 조사 여부를 결정한다. 일반 변경 요청에 필요한 정보가 없으면 검색 전에 질문하고, 가입 유형 확인 방법 자체의 요청이면 탐색할 수 있다. 변경 방향은 해당 분기에서 필요한 경우 묻고, 필요성을 확인하기 전 추가 개인 정보를 요구하지 않는다. 질문은 한 번에 답할 수 있도록 구체적으로 작성하고 이미 받은 정보는 다시 묻지 않는다.
 
 가입 유형을 모르는 사람에게 자격 증명을 요구하지 않는다. “현재 가입 유형을 알고 계신가요?”처럼 확인하고 공식 확인 경로 자체가 미검증이면 그 경로도 확인 필요로 표시한다. vooy가 답변을 받아 기존 범주 정보와 합쳐 도구를 재호출한다. 서버 세션 저장을 전제로 하지 않는다.
 
 ## Evidence Requirements
 
-[sources.md](sources.md)의 verified 사실만 확정 판단에 사용한다. 각 판단은 해당 사실의 적용 가입 유형·신청 주체·예외와 일치해야 한다. 공식 홈페이지 첫 화면만으로 개별 규칙을 입증하지 않는다. 사용자 진술은 상황 입력이며 공식 근거가 아니다.
+[sources.md](sources.md)의 과거 verified 사실은 회귀 비교·조사 기준이다. 실행 시 직접 열람·인용 일치·문맥 검토한 사실만 Evidence로 사용한다. ID는 Harness가 발급하며 모델 finding key를 신뢰하지 않는다. 각 판단은 해당 사실의 적용 가입 유형·신청 주체·예외와 일치해야 한다. 공식 홈페이지 첫 화면만으로 개별 규칙을 입증하지 않는다. 사용자 진술은 상황 입력이며 공식 근거가 아니다.
 
 근거가 없으면 needs_verification과 확인할 사항을 반환한다. 기관 문의·접수 채널의 이름, 전화번호, 구비 서류, 위임 요건, 기한·금액 역시 공식 근거 확인 전에는 만들어 넣지 않는다.
 
 ## Example Requests / Responses — 실행 가능한 업무 호출
 
-아래는 현재 업무 입력과 주요 결과다. 설명 자체는 행정 규칙의 증거가 아니며 실제 evidence는 sources.md의 verified 사실만 포함한다. 외부 신청 제출이나 인증은 수행하지 않는다.
+아래는 업무 입력과 가능한 주요 결과다. 실제 채널·인용·다음 행동은 검색/원문 내용에 따라 달라지고 고정되지 않는다. API 실패는 아래 정상 결과 예시와 별개다. 설명 자체는 행정 규칙의 증거가 아니며 실제 evidence는 sources.md의 verified 사실만 포함한다. 외부 신청 제출이나 인증은 수행하지 않는다.
 
 ### 가입 유형 미확인
 
@@ -191,9 +192,9 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 }
 ```
 
-현재는 경로의 존재와 웹 진입점이 검증되어 네 경로와 근거를 반환한다. 사용자별 조건은 미확인이라 needs_verification이며 use_channel은 없다:
+실제 조사에서 경로의 존재와 진입점을 확인한 범위만 반환한다. 사용자별 조건은 미확인이라 needs_verification이며 use_channel은 없다:
 
-응답: `needs_verification`. `channels`에 phone·online·mobile·visit를 표시하고, 온라인 applicationUrl과 인증 필요 근거를 포함한다. 경로별 조건은 unverified이며, 다음 행동은 공식 정보 확인이다. 준비 사항 전체의 충족이나 신청 가능성을 확정하지 않는다.
+응답: `needs_verification`. `channels`에는 이번에 공식 원문으로 확인한 경로만 표시하고, 실제 관측한 신청 진입점만 applicationUrl에 넣는다. 경로별 조건은 unverified이며, 다음 행동은 공식 정보 확인이다. 준비 사항 전체의 충족이나 신청 가능성을 확정하지 않는다.
 
 가족 요청 예시:
 
@@ -206,7 +207,7 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 }
 ```
 
-응답: `needs_verification`. 네 경로를 표시하고 `applicant-authority` check를 `unverified`로 반환한다. NPS-003-01의 조문 범위만 설명하며 가족 권한을 인정하지 않는다. 다음 행동은 경로별 대리 허용·권한·준비 조건의 공식 확인이다.
+응답: `needs_verification`. 실제 확인한 경로와 대리 조문 범위만 설명하고 사용자별 권한 조건을 unverified로 반환한다. 가족 권한을 인정하지 않는다. 다음 행동은 경로별 대리 허용·권한·준비 조건의 공식 확인이다.
 
 ### 전화 연결 실패 — 검증된 경로와 확인할 조건
 
@@ -224,11 +225,11 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 
 | 필드 | 실제 동작 |
 | --- | --- |
-| channels | phone·online·mobile·visit. phone도 존재가 검증됐으므로 목록에는 유지 |
-| online.applicationUrl | `https://www.nps.or.kr/elctcvlcpt/dclraply/getOHAC0036M0.do` |
-| checks | 사용자 진술 기준 안내 대상만 satisfied. 변경 방향·신청 주체·준비 사항·경로별 조건은 unverified |
+| channels | 실제 열람한 원문이 뒷받침하는 경로만 포함. phone도 존재를 확인했다면 목록에는 유지 |
+| online.applicationUrl | 이번 원문에 직접 연결되어 관측한 공식 신청 진입점. 확인하지 못하면 null |
+| checks | 원문 및 사용자 상황의 대조. 개별 인증·권한·불명확한 적용 조건은 unverified |
 | nextActions | phone 외 경로 후보에 verify_official_information. 인증·권한·준비 조건 확인 안내이며 use_channel은 없음 |
-| evidence | 실제 참조한 verified 사실만 포함. pending ID 없음 |
+| evidence | 이번에 읽고 검증한 원문·인용만 포함. sourceId·quote·조회 시각과 Harness ID 연결 |
 
 웹 주소는 로그인 필요 안내까지 확인한 진입점이며, 인증 후 양식이나 개인의 이용 가능성까지 검증한 것이 아니다.
 
@@ -243,7 +244,13 @@ phone 실패는 전화 신청의 법적 불가나 공식 서비스 중단을 뜻
 
 ## 구현 전환 순서
 
-정적 Procedure Data, 순수 점검 함수, test/업무 Zod 분기 및 MCP 매핑을 구현했다. 질문은 가입 유형 → 실제 신청 주체 → 변경 방향 순서로 반환한다. A~D와 전체 범주 조합, 경로·근거 참조, legacy/modern MCP 호출을 테스트한다. 후속 작업은 경로별 이용 조건의 공식 검증이며 HTTPS 배포와 실제 vooy 연결은 별도 단계다.
+실제 Responses Research Loop, test/업무 Zod 분기와 MCP 매핑을 구현했다. 결정·예산·직접 원문·인용·문맥 검토·ID 검증과 pure resolution을 분리한다. 기본 테스트의 모델/검색/원문은 Fake이며 실제 검색 성공은 --live로 별도 검증한다. HTTPS와 실제 vooy 연결은 별도 단계다.
+
+## Research 기술 오류와 부분 결과
+
+키 누락·검색 API 장애·모델/문맥 검토 실패·전체 타임아웃·검증 근거 전무는 MCP isError=true이며 structuredContent를 생성하지 않는다. content JSON은 `{ "error": { "code": "missing_api_key", "message": "..." } }` 형태다. request 설정·키·원본 예외·스택은 노출하지 않는다. 코드 예: missing_api_key / model_failed / search_api_failed / review_failed / timeout / research_incomplete.
+
+일부 원문 실패가 있어도 다른 근거로 전체 결과를 검증했다면 source_unavailable을 명시할 수 있다. 한도까지 전체 초안이 검증되지 않았지만 인용·문맥 검토를 통과한 사실은 있으면 needs_verification + research_limit의 부분 결과로 반환한다. 이때 경로 추천 없이 확인한 사실과 남은 범위만 표시한다. 아무 근거도 검증하지 못했으면 정상 행정 결과로 위장하지 않는다. 실행 한도와 지원 원문 형식은 [architecture.md](architecture.md)를 따른다.
 
 ## Error Cases
 

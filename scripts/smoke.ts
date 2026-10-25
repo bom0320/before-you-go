@@ -2,38 +2,40 @@ import assert from 'node:assert/strict';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { procedureOutput } from '../src/procedure/schema.js';
 
-const url = new URL(process.argv[2] ?? 'http://127.0.0.1:3000/mcp');
+const live = process.argv.includes('--live');
+const target = process.argv.slice(2).find(value => value !== '--live') ?? 'http://127.0.0.1:3000/mcp';
 const client = new Client({ name: 'before-you-go-smoke', version: '0.1.0' });
 try {
-  await client.connect(new StreamableHTTPClientTransport(url));
+  await client.connect(new StreamableHTTPClientTransport(new URL(target)));
   const tools = await client.listTools();
-  assert.deepEqual(tools.tools.map(t => t.name), ['check_procedure_readiness']);
-  console.log('tools/list:', JSON.stringify(tools.tools.map(tool => tool.name)));
-  const result = await client.callTool({ name: 'check_procedure_readiness', arguments: { procedure: 'test' } });
-  assert.equal(result.isError, undefined);
-  assert.equal((result.structuredContent as Record<string, unknown>)?.status, 'not_evaluated');
-  console.log('tools/call:', JSON.stringify(result));
-  const scenarios = [
-    { name: 'A', input: { subscriberType: 'unknown' }, status: 'needs_information' },
-    { name: 'B', input: { subscriberType: 'voluntary', applicant: 'self', changeGoal: 'increase', unavailableChannel: 'phone' }, status: 'needs_verification' },
-    { name: 'C', input: { subscriberType: 'voluntary', applicant: 'family', changeGoal: 'increase', unavailableChannel: 'phone' }, status: 'needs_verification' },
-    { name: 'D', input: { subscriberType: 'other', applicant: 'self' }, status: 'unsupported' },
-  ];
-  for (const scenario of scenarios) {
-    const called = await client.callTool({ name: 'check_procedure_readiness', arguments: {
-      procedure: 'national_pension_premium_change', ...scenario.input,
-    } });
-    assert.ok(!called.isError);
-    const output = procedureOutput.parse(called.structuredContent);
-    assert.equal(output.status, scenario.status);
-    assert.deepEqual(JSON.parse((called.content[0] as { text: string }).text), output);
-    assert.ok(output.nextActions.every(action => action.kind !== 'use_channel'));
-    console.log(`tools/call case ${scenario.name}:`, JSON.stringify({
-      status: output.status, channels: output.channels.map(channel => channel.type),
-      applicationUrl: output.channels.find(channel => channel.type === 'online')?.applicationUrl ?? null,
-      evidenceIds: output.evidence.map(fact => fact.id),
-    }));
+  assert.deepEqual(tools.tools.map(tool => tool.name), ['check_procedure_readiness']);
+  console.log('tools/list:', tools.tools.map(tool => tool.name));
+  const called = await client.callTool({ name: 'check_procedure_readiness', arguments: { procedure: 'test' } });
+  assert.ok(!called.isError);
+  assert.equal((called.structuredContent as Record<string, unknown>)?.status, 'not_evaluated');
+  console.log('test call: passed');
+  for (const subscriberType of ['unknown', 'other']) {
+    const result = await client.callTool({ name: 'check_procedure_readiness', arguments: { procedure: 'national_pension_premium_change', subscriberType } });
+    assert.ok(!result.isError);
+    const output = procedureOutput.parse(result.structuredContent);
+    assert.equal(output.status, subscriberType === 'unknown' ? 'needs_information' : 'unsupported');
+    assert.deepEqual(JSON.parse((result.content[0] as { text: string }).text), output);
+    console.log(`preflight ${subscriberType}:`, output.status);
   }
-} finally {
-  await client.close();
-}
+  if (live) {
+    const result = await client.callTool({ name: 'check_procedure_readiness', arguments: {
+      procedure: 'national_pension_premium_change', goal: '국민연금 보험료를 올리고 싶은데 전화가 안 된다',
+      subscriberType: 'voluntary', applicant: 'self', changeGoal: 'increase', unavailableChannel: 'phone',
+    } }, { timeout: 120_000 });
+    if (result.isError) {
+      console.error('Live research failed:', result.content);
+      process.exitCode = 1;
+    } else {
+      const output = procedureOutput.parse(result.structuredContent);
+      assert.deepEqual(JSON.parse((result.content[0] as { text: string }).text), output);
+      assert.ok(output.evidence.length > 0, 'live evidence must exist');
+      assert.ok(output.evidence.every(item => item.sourceId && item.quote && item.retrievedAt));
+      console.log('Live research:', JSON.stringify(output, null, 2));
+    }
+  } else console.log('Live API research not run. Use --live explicitly; the server needs OPENAI_API_KEY.');
+} finally { await client.close(); }

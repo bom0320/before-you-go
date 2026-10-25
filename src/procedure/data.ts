@@ -1,6 +1,6 @@
 import type { Evidence } from './schema.js';
 
-// Only the verified facts used by this MVP. Scope/limitations are part of each fact.
+// Historical 2026-10-25 snapshot for regression comparison only. Never used by live research.
 // Source of truth: docs/sources.md; no live lookup or pending rules.
 const detailUrl = 'https://nps.or.kr/elctcvlcpt/comm/getOHAC0000M5.do?menuId=MN24001070';
 const listUrl = 'https://nps.or.kr/elctcvlcpt/comm/getOHAC0000M3.do';

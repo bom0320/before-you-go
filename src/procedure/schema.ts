@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const channelType = z.enum(['phone', 'online', 'mobile', 'visit']);
 export const procedureInput = z.strictObject({
   procedure: z.literal('national_pension_premium_change'),
+  goal: z.string().trim().min(1).max(300).optional()
+    .describe('짧은 행정 목표 또는 가입 유형 확인 방법 질문. 개인정보·연락처·인증정보를 포함하지 마세요. 구조화된 값을 변경하지 않습니다.'),
   subscriberType: z.enum(['voluntary', 'other', 'unknown']).optional()
     .describe('가입자가 밝힌 가입 유형. 임의가입자가 아니면 other, 모르면 unknown.'),
   applicant: z.enum(['self', 'family', 'unknown']).optional()
@@ -24,6 +26,9 @@ export const evidenceSchema = z.strictObject({
   fact: text,
   scope: text,
   verifiedAt: z.iso.date(),
+  sourceId: text.optional(),
+  quote: z.string().min(20).max(1500).optional(),
+  retrievedAt: z.iso.datetime().optional(),
 });
 export type Evidence = z.infer<typeof evidenceSchema>;
 
@@ -32,11 +37,11 @@ export const procedureOutput = z.strictObject({
   status: z.enum(['unsupported', 'needs_information', 'needs_verification', 'not_ready', 'ready']),
   summary: text,
   missingInformation: z.array(z.strictObject({
-    field: z.enum(['subscriberType', 'applicant', 'changeGoal', 'unavailableChannel']),
+    field: z.enum(['subscriberType', 'applicant', 'changeGoal', 'unavailableChannel', 'goal']),
     question: text,
   })),
   uncertainties: z.array(z.strictObject({
-    code: z.enum(['source_pending', 'source_conflict', 'source_outdated', 'outside_scope']),
+    code: z.enum(['source_pending', 'source_conflict', 'source_outdated', 'outside_scope', 'research_limit', 'source_unavailable', 'evidence_rejected']),
     message: text,
   })),
   checks: z.array(z.strictObject({
