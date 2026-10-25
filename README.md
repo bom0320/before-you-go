@@ -1,10 +1,14 @@
 # before-you-go
 
-vooy MCP 해커톤용 최소 TypeScript/Node.js MCP 서버. `/mcp`에서 Streamable HTTP를 제공합니다.
-실제 국민연금 업무 규칙, 프론트엔드, 데이터베이스, 로그인은 구현하지 않았습니다.
+“행정 절차를 바꾸지 않아도, 그 절차를 찾아 헤매는 경험은 바꿀 수 있다.”
 
-이 체크아웃은 작업 시작 당시 `.git`만 있었으며 `AGENTS.md`와 `docs/`는 없었습니다.
-아래 입력 계약은 통신 검증을 위한 임시 계약입니다. 프로젝트 문서가 제공되면 확인해야 합니다.
+사용자 상황에 맞는 절차를 공식 근거와 대조하고, 현재 경로가 막혔을 때 검증된 대체 경로와 다음 행동을 안내하는 vooy MCP 해커톤 프로젝트입니다.
+
+## MVP 범위와 현재 구현 상태
+
+목표 MVP는 **국민연금 임의가입자의 보험료 변경 절차 안내와 사전 점검**입니다. 본인·가족 신청 의향·가입 유형 미확인·전화 연결 실패를 고려하며, 실제 신청 제출·승인·본인 인증·결제·정부기관 계정 연동은 제외합니다.
+
+현재는 TypeScript/Node.js 및 공식 MCP SDK v2 기반 `/mcp` Streamable HTTP와 테스트 도구 한 개만 구현했습니다. 아래 임시 계약만 실행할 수 있으며, 업무 판단·신청 경로 및 대안 안내는 아직 구현하지 않았습니다. 프론트엔드·DB·로그인도 없습니다.
 
 ## 실행
 
@@ -58,26 +62,18 @@ SDK v2 `createMcpHandler`의 기본 `legacy: 'stateless'` 지원을 유지하여
 ## cloudflared 연결
 
 [Cloudflare 공식 설치 안내](https://developers.cloudflare.com/tunnel/get-started/)에 따라 cloudflared를 준비합니다.
-임시 Quick Tunnel은 다음과 같이 실행할 수 있습니다.
-
-```sh
-cloudflared tunnel --url http://127.0.0.1:3000
-```
-
-출력된 `https://random-name.trycloudflare.com`의 **정확한 호스트명**을 허용하고 서버를 실행(또는 재시작)합니다.
-와일드카드를 사용하지 않습니다.
-
-```sh
-ALLOWED_HOSTS=localhost,127.0.0.1,random-name.trycloudflare.com pnpm dev
-pnpm smoke https://random-name.trycloudflare.com/mcp
-```
-
-[Quick Tunnel은 SSE를 지원하지 않습니다](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
-SDK 기본 legacy 응답은 SSE를 사용하므로 **vooy 검증에는 Named Tunnel을 사용하세요**.
+SDK 기본 legacy 응답은 SSE를 사용하므로 **기존 클라이언트와 vooy 검증에는 Named Tunnel을 사용하세요**.
 Cloudflare에서 Named Tunnel의 공개 호스트를 만들고 서비스를 `http://127.0.0.1:3000`으로 지정한 뒤,
-안내된 cloudflared 실행 명령으로 연결합니다. 해당 공개 호스트를 `ALLOWED_HOSTS`에 추가하고
-`pnpm smoke https://YOUR-HOST/mcp`로 검증합니다. 토큰은 저장소나 로그에 공유하지 마세요.
-Quick Tunnel은 최신 프로토콜의 JSON 응답 확인에 한정할 수 있으며 기존 클라이언트 호환 검증을 대신하지 않습니다.
+안내된 cloudflared 실행 명령으로 연결합니다. 정확한 공개 호스트명을 허용하고 서버를 실행합니다.
+
+```sh
+ALLOWED_HOSTS=localhost,127.0.0.1,YOUR-HOST pnpm dev
+# 별도 터미널
+pnpm smoke https://YOUR-HOST/mcp
+```
+
+토큰은 저장소나 로그에 공유하지 마세요. [Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) 실행은
+`cloudflared tunnel --url http://127.0.0.1:3000`이지만, SSE 미지원 제약이 있어 기존 클라이언트 호환 검증을 대신하지 않습니다.
 
 Origin 없는 서버 클라이언트는 허용됩니다. 기본 Origin 허용 목록은 로컬 호스트이며,
 브라우저 클라이언트가 필요하면 `ALLOWED_ORIGINS`에 그 클라이언트의 정확한 호스트명을 쉼표로 지정합니다.
@@ -85,16 +81,14 @@ SDK Origin 검증은 호스트 기준이며 포트를 구분하지 않습니다.
 인증 없는 공개 데모이므로 테스트 입력만 사용하세요. 서버는 요청 본문·헤더를 로그로 남기지 않으며,
 외부 데이터 조회·파일 접근·쓰기 작업을 수행하는 도구를 노출하지 않습니다. 종료할 때 터널도 중단합니다.
 
-## 파일 구성과 다음 단계
+## 관련 설계 문서
 
-- `src/mcp.ts`: Zod 계약과 MCP 도구 등록
-- `src/http.ts`: HTTP 경로, SDK 어댑터, Host/Origin 검증
-- `src/index.ts`: 환경 설정, 실행과 종료
-- `scripts/smoke.ts`: 실행 중인 서버 호출 검증
-- `test/http.test.ts`: HTTP 통합 테스트
+1. [문제 정의와 원문 보존 상태](docs/problem-definition.md)
+2. [제품 명세와 MVP 범위](docs/brief.md)
+3. [현재 및 목표 도구 계약](docs/tool-contract.md)
+4. [공식 자료와 검증 상태](docs/sources.md)
+5. [현재 구조와 목표 아키텍처](docs/architecture.md)
 
-다음 작업: 누락된 프로젝트 문서 확인, 정식 입력·출력 계약 확정, 근거 있는 업무 규칙 설계,
-실제 vooy/Named Tunnel 연결 검증. 실제 개인정보나 업무 기능을 추가하기 전 인증·운영 정책을 설계해야 합니다.
-
-API 근거: [공식 SDK v2 HTTP 및 기존 클라이언트 호환 안내](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/docs/migration/support-2026-07-28.md).
-패키지 버전은 `pnpm-lock.yaml`에 고정됩니다.
+개발 규칙은 [AGENTS.md](AGENTS.md)를 따릅니다. 목표 업무 계약은 아직 미구현이며, 공식 행정 근거는 pending입니다.
+문제 정의 11개 섹션의 원문은 저장소에 없어 problem-definition.md에 누락 상태와 이번 요청의 배경을 구분해 기록했습니다.
+패키지 버전은 package.json과 pnpm-lock.yaml을 기준으로 합니다.

@@ -3,17 +3,32 @@
 ## 목표 요청 흐름과 책임
 
 ```text
-User → vooy → MCP (/mcp) → Procedure Checker → Result → vooy → User
+User
+  ↓
+vooy
+  ↓
+MCP Tool (/mcp)
+  ↓
+Procedure Checker
+  ↓
+Verified Procedure Data
+  ↓
+Applicable Channels / Alternatives
+  ↓
+Result + Evidence
+  ↓
+vooy → User
 ```
 
-이 흐름의 Procedure Checker는 **목표 역할**이며 현재 구현된 모듈명이 아니다.
+이 흐름은 목표 처리 흐름이다. Procedure Checker와 Verified Procedure Data, Applicable Channels / Alternatives는 **목표 역할**이며 현재 구현된 모듈명이 아니다. 별도 서비스나 에이전트로 만들지 않는다.
 
 | 경계 | 책임 |
 | --- | --- |
 | User | 자신의 상황과 요청을 제공하고 확인 질문에 응답 |
-| vooy | 대화 문맥에서 입력 구성, 도구 호출, 결과와 추가 질문을 사용자에게 전달 |
-| MCP 서버 | Zod 입력 검증, 도구 계약 준수, 업무 판단 결과와 근거 반환 |
+| vooy | 대화, 필요한 상황과 이용 어려운 경로 수집, MCP 호출, 결과·추가 질문 전달 |
+| MCP Tool | Zod 입력 검증, 도구 계약 준수, 구조화된 결과와 근거 반환 |
 | Procedure Checker (목표) | 사용자 상황을 검증된 규칙에 대조하고 정보 부족·근거 부족·다음 행동 구분 |
+| Procedure Data (목표) | 검증된 절차·경로별 조건·공식 신청 페이지·준비 사항과 사실 ID 관리 |
 | 공식 기관 | 행정 절차의 원출처 및 실제 접수·최종 판단 |
 
 vooy가 가입 유형이나 대리 권한을 추정한 값은 공식 사실로 취급하지 않는다. 서버는 대화 기록 전체를 요구하지 않으며 전달된 입력만으로 판단한다. 추가 질문은 결과로 반환하고 vooy가 대화를 이어간다. 서버가 직접 신청하거나 사용자를 인증하지 않는다.
@@ -34,7 +49,9 @@ vooy가 가입 유형이나 대리 권한을 추정한 값은 공식 사실로 �
 
 ## 목표 구조 — 다음 구현의 기준
 
-MCP 도구 핸들러는 입력 검증 후 업무 점검 함수를 호출하고, 결과를 `structuredContent`와 같은 내용의 JSON 텍스트 `content`로 감싼다. 업무 함수는 가입 유형·신청 주체·변경 목표와 검증된 규칙을 받아 결과 객체를 만든다. HTTP Request/Response, SDK transport를 업무 함수에 전달하지 않는다.
+MCP 도구 핸들러는 입력 검증 후 업무 점검 함수를 호출하고, 결과를 `structuredContent`와 같은 내용의 JSON 텍스트 `content`로 감싼다. 업무 함수는 가입 유형·신청 주체·변경 목표·현재 이용이 어려운 경로와 검증된 규칙을 받아 결과 객체를 만든다. HTTP Request/Response, SDK transport를 업무 함수에 전달하지 않는다.
+
+경로 처리는 공식 자료에서 존재가 확인된 경로를 읽고, 경로별 사용자 조건을 `checks`로 대조한 뒤, 사용자가 보고한 어려운 경로를 추천 대상에서 제외하는 순서다. 조건이 불명확한 경로는 이용 가능하다고 안내하지 않는다. 대체 경로는 별도 엔진 없이 같은 함수에서 선정하여 `nextActions`로 반환한다. 전화 연결 실패는 공식 규칙 데이터가 아닌 요청별 사용자 상황이며 법적 불가 규칙으로 저장하지 않는다.
 
 업무 규칙은 전송 계층의 HTTP 분기에 넣지 않는다. 구현 시 작은 업무 함수와 필요한 규칙 데이터만 추가하며 저장소·서비스 계층·플러그인 체계를 미리 만들지 않는다. 목표 계약은 [tool-contract.md](tool-contract.md)에 정의한다. 아직 해당 함수나 파일은 존재하지 않는다.
 
