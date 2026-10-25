@@ -59,7 +59,7 @@ Finding은 이번 source ID와 20~1,500자 인용이 있어야 한다. 서버는
 
 ## 모델과 테스트
 
-OPENAI_API_KEY는 서버 환경에서만 사용하고 OPENAI_MODEL 기본값은 gpt-4.1이다. Responses API와 SDK의 zodTextFormat을 사용한다. Agent와 search/inspect/review는 테스트에서만 Fake로 주입한다. 기본 pnpm test는 외부 유료 API를 호출하지 않는다. 실제 검색 성공 여부는 pnpm smoke --live로 별도 검증한다. 구체 설정·공식 문서 링크는 [README](../README.md)를 따른다.
+OPENAI_API_KEY는 서버 환경에서만 사용하고 OPENAI_MODEL 기본값은 gpt-4.1이다. Responses API와 SDK의 zodTextFormat을 사용한다. 모델 결정 출력은 모든 필드가 필수인 flat object(type, queries, sourceIds, findings, draft, questions)이며 미사용 값은 빈 배열/null이다. 어댑터가 기존 내부 Decision union으로 변환하면서 분기별 필수 값·미사용 필드·HTTPS URL을 검증한다. 모델용 스키마에는 지원되지 않는 URI format을 전송하지 않으며 MCP 출력 계약은 유지한다. review는 기존 필수 필드의 strict object를 사용한다. Agent와 search/inspect/review는 테스트에서만 Fake로 주입한다. 기본 pnpm test는 외부 유료 API를 호출하지 않는다. 실제 검색 성공 여부는 pnpm smoke --live로 별도 검증한다. 구체 설정·공식 문서 링크는 [README](../README.md)를 따른다.
 
 ## 경계와 공개 데모
 

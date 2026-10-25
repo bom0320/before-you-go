@@ -25,6 +25,39 @@ export const decisionSchema = z.strictObject({ decision: z.union([
   z.strictObject({ type: z.literal('needs_information'), questions: procedureOutput.shape.missingInformation.min(1).max(4) }),
 ]) });
 export type Decision = z.infer<typeof decisionSchema>['decision'];
+// Model wire format is separate from the internal union and MCP contract.
+// URL format `uri` is not supported by Structured Outputs; validate HTTPS locally.
+const modelDraftSchema = draftSchema.extend({
+  channels: z.array(procedureOutput.shape.channels.element.extend({ applicationUrl: z.string().nullable() })),
+});
+export const modelDecisionSchema = z.strictObject({
+  type: z.enum(['search', 'inspect', 'complete', 'needs_information']),
+  queries: z.array(z.string().min(1).max(300)).max(4),
+  sourceIds: z.array(z.string().min(1)).max(6),
+  findings: z.array(findingSchema).max(24),
+  draft: modelDraftSchema.nullable(),
+  questions: procedureOutput.shape.missingInformation.max(4),
+});
+export function toResearchDecision(value: unknown): Decision {
+  const output = modelDecisionSchema.parse(value);
+  const { type, queries, sourceIds, findings, draft, questions } = output;
+  // Reject contradictory payloads rather than silently discarding model claims.
+  if ((type !== 'search' && queries.length) || (type !== 'inspect' && sourceIds.length)
+    || (type !== 'complete' && (findings.length || draft !== null))
+    || (type !== 'needs_information' && questions.length)) {
+    throw new Error('Unexpected fields for research decision type');
+  }
+  let decision: unknown;
+  switch (type) {
+    case 'search': decision = { type, queries }; break;
+    case 'inspect': decision = { type, sourceIds }; break;
+    case 'complete': decision = { type, findings, draft }; break;
+    case 'needs_information': decision = { type, questions }; break;
+  }
+  // Preserve original branch requirements, URL validation and all refinements.
+  return decisionSchema.parse({ decision }).decision;
+}
+
 export type Completion = z.infer<typeof completeSchema>;
 export type Finding = z.infer<typeof findingSchema>;
 export const reviewSchema = z.strictObject({

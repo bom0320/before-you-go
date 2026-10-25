@@ -217,7 +217,7 @@ test('real OpenAI SDK adapter uses Responses structured decisions, required filt
   const client = new OpenAI({ apiKey: 'synthetic-test-key', maxRetries: 0, fetch: async (_url, init) => {
     const body = JSON.parse(String(init?.body)); requests.push(body);
     const output = body.tools ? { id: 'resp_search', object: 'response', status: 'completed', output: [{ id: 'ws_test', type: 'web_search_call', status: 'completed', action: { type: 'search', queries: ['query'], sources: [{ type: 'url', url: 'https://nps.or.kr/real-tool-source' }, { type: 'url', url: 'https://attacker.test' }] } }] }
-      : apiMessage({ decision: { type: 'search', queries: ['query'] } });
+      : apiMessage({ type: 'search', queries: ['query'], sourceIds: [], findings: [], draft: null, questions: [] });
     return new Response(JSON.stringify(output), { headers: { 'content-type': 'application/json' } });
   } });
   const dependencies = createResearcher(client);
